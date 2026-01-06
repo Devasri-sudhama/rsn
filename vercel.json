@@ -2,28 +2,16 @@
   "version": 2,
   "builds": [
     {
-      "src": "rsn-backend/server.js",
-      "use": "@vercel/node"
-    },
-    {
       "src": "rsn-frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
+      "use": "@vercel/angular"
     }
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/rsn-backend/server.js"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/rsn-frontend/dist/index.html"
+      "dest": "/rsn-frontend/$1"
     }
-  ]
+  ],
+  "buildCommand": "cd rsn-frontend && npm install && npm run build -- --output-path=dist/rsn-frontend/browser",
+  "outputDirectory": "rsn-frontend/dist/rsn-frontend/browser"
 }
