@@ -1,13 +1,26 @@
 {
-  functions {
-    backendapi.js {
-      runtime nodejs18.x
-    }
-  },
-  routes [
+  "version": 2,
+  "builds": [
     {
-      src api(.),
-      dest backendapi$1.js
+      "src": "rsn-backend/server.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "rsn-frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "rsn-backend/server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "rsn-frontend/dist/$1"
     }
   ]
 }
