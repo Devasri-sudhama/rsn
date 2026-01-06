@@ -1,0 +1,13 @@
+{
+  functions {
+    backendapi.js {
+      runtime nodejs18.x
+    }
+  },
+  routes [
+    {
+      src api(.),
+      dest backendapi$1.js
+    }
+  ]
+}
