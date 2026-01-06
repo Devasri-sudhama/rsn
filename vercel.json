@@ -16,11 +16,14 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "rsn-backend/server.js"
+      "dest": "/rsn-backend/server.js"
+    },
+    {
+      "handle": "filesystem"
     },
     {
       "src": "/(.*)",
-      "dest": "rsn-frontend/dist/$1"
+      "dest": "/rsn-frontend/dist/index.html"
     }
   ]
 }
