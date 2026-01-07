@@ -5,35 +5,40 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const multer = require('multer');
 const nodemailer = require('nodemailer');
-const path = require('path');
-const fs = require('fs');
+const multer = require('multer');
 
 const app = express();
 
 // ===============================
-// MIDDLEWARE
+// CORS CONFIG
 // ===============================
-app.use(cors({ origin: '*' }));
+const allowedOrigins = [
+    'http://localhost:4200',
+    'https://rsn-frontend.vercel.app',
+    'https://rsn-omega.vercel.app',
+    'https://rsn-production-07e6.up.railway.app'
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (!allowedOrigins.includes(origin)) {
+            console.warn('❌ CORS Blocked:', origin);
+            return callback(new Error('CORS not allowed'), false);
+        }
+        callback(null, true);
+    },
+    credentials: true
+}));
+
+app.options('*', cors()); // IMPORTANT for Railway
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ===============================
-// MULTER CONFIG (FILE UPLOAD)
-// ===============================
-const uploadDir = 'uploads';
-
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir);
-}
-
-const upload = multer({
-    dest: uploadDir,
-    limits: { fileSize: 2 * 1024 * 1024 } // 2MB
-});
-
-// ===============================
-// NODEMAILER CONFIG (GMAIL)
+// NODEMAILER (GMAIL - RAILWAY SAFE)
 // ===============================
 const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -43,364 +48,147 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// ===============================
-// VERIFY SMTP ON STARTUP
-// ===============================
-transporter.verify((error) => {
-    if (error) {
-        console.error('❌ SMTP ERROR:', error);
+// Verify SMTP (non-blocking)
+transporter.verify((err) => {
+    if (err) {
+        console.error('❌ SMTP ERROR:', err.message);
     } else {
         console.log('✅ SMTP READY');
     }
 });
 
 // ===============================
-// API ROUTE
+// FILE UPLOAD (MEMORY STORAGE)
+// ===============================
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+// ===============================
+// HEALTH + ROOT
+// ===============================
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: 'Backend is running',
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.get('/', (req, res) => {
+    res.json({
+        message: 'RSN Backend API',
+        endpoints: {
+            health: '/api/health',
+            careers: '/api/careers/apply',
+            contact: '/api/contact'
+        }
+    });
+});
+
+// ===============================
+// CAREERS API
 // ===============================
 app.post('/api/careers/apply', upload.single('resume'), async (req, res) => {
     try {
-        console.log('📩 FORM DATA:', req.body);
-        console.log('📎 FILE:', req.file);
-
         if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                message: 'Resume file missing'
-            });
+            return res.status(400).json({ success: false, message: 'Resume required' });
         }
 
-        const {
-            name,
-            email,
-            phone,
-            position,
-            message
-        } = req.body;
-        const formattedPosition = formatPosition(position);
+        const { name, email, phone, position, message } = req.body;
 
-
-        // ===============================
-        // EMAIL CONTENT
-        // ===============================
-        const mailOptions = {
-            from: `"Career Portal" <${process.env.EMAIL_USER}>`,
-            to: process.env.HR_EMAIL,
-            subject: `RSN & Co New Job Application – ${formattedPosition}`,
-            html: `
- <div style="
-  max-width: 680px;
-  margin: 0 auto;
-  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-">
-
-  <!-- HEADER -->
-  <div style="
-    padding: 24px 32px;
-    border-bottom: 3px solid #000000;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  ">
-    <!-- LOGO -->
-<!--    <img-->
-<!--      src="assets/images/logo.png"-->
-<!--      alt="Company Logo"-->
-<!--      style="height: 48px; object-fit: contain;"-->
-<!--    />-->
-
-    <div>
-      <h2 style="
-        margin: 0;
-        font-size: 20px;
-        color: #000000;
-        letter-spacing: 0.5px;
-      ">
-        New Job Application
-      </h2>
-      <p style="
-        margin: 4px 0 0;
-        font-size: 13px;
-        color: #555555;
-      ">
-        RSN & Co Careers Portal Submission
-      </p>
-    </div>
-  </div>
-
-  <!-- BODY -->
-  <div style="padding: 28px 32px; color: #111111;">
-
-    <!-- DETAILS TABLE -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
-      <tr>
-        <td style="padding: 10px 0; width: 35%; color: #555555;"><strong>Name</strong></td>
-        <td style="padding: 10px 0;">${name}</td>
-      </tr>
-
-      <tr>
-        <td style="padding: 10px 0; color: #555555;"><strong>Email</strong></td>
-        <td style="padding: 10px 0;">${email}</td>
-      </tr>
-
-      <tr>
-        <td style="padding: 10px 0; color: #555555;"><strong>Phone</strong></td>
-        <td style="padding: 10px 0;">${phone}</td>
-      </tr>
-
-      <tr>
-        <td style="padding: 10px 0; color: #555555;"><strong>Position</strong></td>
-        <td style="padding: 10px 0;">${formattedPosition}</td>
-      </tr>
-    </table>
-
-    <!-- MESSAGE -->
-    <div style="margin-top: 28px;">
-      <p style="
-        margin: 0 0 10px;
-        font-weight: 600;
-        color: #000000;
-        text-transform: uppercase;
-        font-size: 13px;
-        letter-spacing: 0.6px;
-      ">
-        Cover Letter / Message
-      </p>
-
-      <div style="
-        background: #f8f8f8;
-        border-left: 4px solid #000000;
-        padding: 18px;
-        line-height: 1.7;
-        color: #222222;
-        white-space: pre-line;
-      ">
-        ${message}
-      </div>
-    </div>
-
-  </div>
-
-  <!-- FOOTER -->
-  <div style="
-    background: #fafafa;
-    border-top: 1px solid #e5e7eb;
-    padding: 16px 32px;
-    font-size: 12px;
-    color: #666666;
-    text-align: center;
-  ">
-    This email was generated automatically from the Careers Portal.<br/>
-    © ${new Date().getFullYear()} RSN & Co. All rights reserved.
-  </div>
-
-</div>
-
-      `,
-            attachments: [
-                {
-                    filename: req.file.originalname,
-                    path: req.file.path
-                }
-            ]
-        };
-
-        // ===============================
-        // SEND EMAIL
-        // ===============================
-        await transporter.sendMail(mailOptions);
-
-        console.log('✅ EMAIL SENT SUCCESSFULLY');
-
-        res.status(200).json({
-            success: true,
-            message: 'Application submitted successfully'
-        });
-
-    } catch (err) {
-        console.error('❌ SERVER ERROR:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to send email'
-        });
-    }
-});
-app.post('/api/contact', async (req, res) => {
-    try {
-        console.log('📩 CONTACT FORM RECEIVED:', req.body);
-
-        const { name, email, phone, subject,preferredContact, message } = req.body;
-
-        if (!name || !email || !message) {
-            return res.status(400).json({
-                success: false,
-                message: 'Missing required fields'
-            });
+        if (!name || !email || !phone || !position) {
+            return res.status(400).json({ success: false, message: 'Missing fields' });
         }
 
-        // ✅ EMAIL CONTENT
         const mailOptions = {
-            from: `"Website Contact" <${process.env.EMAIL_USER}>`,
-            to: process.env.HR_EMAIL,
-            replyTo: email,
-            subject: `Contact Form: ${subject}`,
-            html: `
-      <div style="
-  max-width: 700px;
-  margin: 0 auto;
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
-  font-family: 'FiraSans-Regular;
-  color: #111111;
-">
-
-  <!-- HEADER -->
-  <div style="
-    padding: 24px 32px;
-    border-bottom: 3px solid #000000;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  ">
-    <!-- LOGO -->
-<!--    <img-->
-<!--       src="assets/images/logo.png"-->
-<!--      alt="Company Logo"-->
-<!--      style="height: 44px; object-fit: contain;"-->
-<!--    />-->
-
-    <div>
-      <h2 style="
-        margin: 0;
-        font-size: 20px;
-        font-weight: 600;
-        letter-spacing: 0.4px;
-      ">
-        Contact
-      </h2>
-      <p style="
-        margin: 4px 0 0;
-        font-size: 13px;
-        color: #666666;
-      ">
-        Inquiry Form Submission
-      </p>
-    </div>
-  </div>
-
-  <!-- BODY -->
-  <div style="padding: 28px 32px;">
-
-    <!-- DETAILS TABLE -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
-      <tr>
-        <td style="padding: 10px 0; width: 35%; color: #555555;"><strong>Name</strong></td>
-        <td style="padding: 10px 0;">${name}</td>
-      </tr>
-
-      <tr>
-        <td style="padding: 10px 0; color: #555555;"><strong>Email</strong></td>
-        <td style="padding: 10px 0;">${email}</td>
-      </tr>
-
-      <tr>
-        <td style="padding: 10px 0; color: #555555;"><strong>Phone</strong></td>
-        <td style="padding: 10px 0;">${phone || '-'}</td>
-      </tr>
-       <tr>
-        <td style="padding: 10px 0; color: #555555;"><strong>Preferred Contact</strong></td>
-        <td style="padding: 10px 0;">${preferredContact || '-'}</td>
-      </tr>
-
-      <tr>
-        <td style="padding: 10px 0; color: #555555;"><strong>Subject</strong></td>
-        <td style="padding: 10px 0;">${subject}</td>
-      </tr>
-    </table>
-
-    <!-- MESSAGE -->
-    <div style="margin-top: 26px;">
-      <p style="
-        margin: 0 0 10px;
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        color: #000000;
-      ">
-        Message
-      </p>
-
-      <div style="
-        background: #f8f8f8;
-        border-left: 4px solid #000000;
-        padding: 16px;
-        line-height: 1.7;
-        color: #222222;
-        white-space: pre-line;
-      ">
-        ${message}
-      </div>
-    </div>
-
-  </div>
-
-  <!-- FOOTER -->
-  <div style="
-    border-top: 1px solid #e5e5e5;
-    background: #fafafa;
-    padding: 16px 32px;
-    font-size: 12px;
-    color: #777777;
-    text-align: center;
-  ">
-    This email was generated from the website contact form.<br/>
-    © ${new Date().getFullYear()} RSN & co. All rights reserved.
-  </div>
-
-</div>
-
-      `
+            from: `"RSN Career Portal" <${process.env.EMAIL_USER}>`,
+            to: process.env.HR_EMAIL || process.env.EMAIL_USER,
+            subject: `Job Application: ${name} - ${formatPosition(position)}`,
+            html: `<p><strong>Name:</strong> ${name}</p>
+                   <p><strong>Email:</strong> ${email}</p>
+                   <p><strong>Phone:</strong> ${phone}</p>
+                   <p>${message || ''}</p>`,
+            attachments: [{
+                filename: req.file.originalname,
+                content: req.file.buffer
+            }]
         };
 
-        // ✅ SEND MAIL
         await transporter.sendMail(mailOptions);
 
-        console.log('✅ CONTACT EMAIL SENT');
-
-        return res.status(200).json({
-            success: true,
-            message: 'Contact message sent successfully'
-        });
+        res.status(200).json({ success: true, message: 'Application submitted' });
 
     } catch (err) {
-        console.error('❌ CONTACT ERROR:', err);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to send contact email'
-        });
+        console.error('❌ Career Error:', err);
+        res.status(500).json({ success: false, message: 'Application failed' });
     }
 });
 
 // ===============================
-// START SERVER
+// CONTACT API
+// ===============================
+app.post('/api/contact', async (req, res) => {
+    try {
+        const { name, email, phone, subject, preferredContact, message } = req.body;
+
+        if (!name || !email || !message) {
+            return res.status(400).json({ success: false, message: 'Required fields missing' });
+        }
+
+        const mailOptions = {
+            from: `"RSN Contact" <${process.env.EMAIL_USER}>`,
+            to: process.env.HR_EMAIL || process.env.EMAIL_USER,
+            replyTo: email,
+            subject: subject || 'New Contact',
+            html: `<p><strong>Name:</strong> ${name}</p>
+                   <p><strong>Email:</strong> ${email}</p>
+                   <p><strong>Phone:</strong> ${phone || '-'}</p>
+                   <p><strong>Preferred:</strong> ${preferredContact || 'Email'}</p>
+                   <p>${message}</p>`
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        res.status(200).json({ success: true, message: 'Message sent' });
+
+    } catch (err) {
+        console.error('❌ Contact Error:', err);
+        res.status(500).json({ success: false, message: 'Message failed' });
+    }
+});
+
+// ===============================
+// ERROR HANDLING
+// ===============================
+app.use((err, req, res, next) => {
+    console.error('🔥 Server Error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+});
+
+app.use('*', (req, res) => {
+    res.status(404).json({ success: false, message: 'Endpoint not found' });
+});
+
+// ===============================
+// START SERVER (RAILWAY)
 // ===============================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📧 Email User: ${process.env.EMAIL_USER ? 'Configured' : 'NOT SET'}`);
-  console.log(`🎯 HR Email: ${process.env.HR_EMAIL || 'Using default'}`);
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📧 Email User: ${process.env.EMAIL_USER ? 'Configured' : 'NOT SET'}`);
 });
 
-
+// ===============================
+// HELPERS
+// ===============================
 function formatPosition(value) {
     const map = {
         chartered_accountant: 'Chartered Accountant',
         articleship: 'Articleship',
         others: 'Others'
     };
-
     return map[value] || value;
 }
