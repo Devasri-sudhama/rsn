@@ -20,33 +20,24 @@ const allowedOrigins = [
     'https://rsn-production-07e6.up.railway.app'
 ];
 
-app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        if (!allowedOrigins.includes(origin)) {
-            return callback(new Error('CORS not allowed'), false);
-        }
-        callback(null, true);
-    },
-    credentials: true
-}));
 
 // ✅ FIXED for Node 22
-app.options('/*', cors());
-
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
+
         if (!allowedOrigins.includes(origin)) {
             console.warn('❌ CORS Blocked:', origin);
             return callback(new Error('CORS not allowed'), false);
         }
-        callback(null, true);
-    },
-    credentials: true
-}));
 
-app.options('*', cors()); // IMPORTANT for Railway
+        return callback(null, true);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 204
+}));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
