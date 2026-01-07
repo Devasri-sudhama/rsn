@@ -24,6 +24,20 @@ app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
         if (!allowedOrigins.includes(origin)) {
+            return callback(new Error('CORS not allowed'), false);
+        }
+        callback(null, true);
+    },
+    credentials: true
+}));
+
+// ✅ FIXED for Node 22
+app.options('/*', cors());
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (!allowedOrigins.includes(origin)) {
             console.warn('❌ CORS Blocked:', origin);
             return callback(new Error('CORS not allowed'), false);
         }
