@@ -387,8 +387,11 @@ app.post('/api/contact', async (req, res) => {
 // START SERVER
 // ===============================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📧 Email User: ${process.env.EMAIL_USER ? 'Configured' : 'NOT SET'}`);
+  console.log(`🎯 HR Email: ${process.env.HR_EMAIL || 'Using default'}`);
 });
 
 
